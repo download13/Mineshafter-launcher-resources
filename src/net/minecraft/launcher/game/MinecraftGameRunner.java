@@ -165,7 +165,7 @@ public class MinecraftGameRunner extends AbstractGameRunner implements GameProce
 		} else {
 			boolean is32Bit = "32".equals(System.getProperty("sun.arch.data.model"));
 			String defaultArgument = is32Bit ? "-Xmx512M" : "-Xmx1G";
-			defaultArgument += " -XX:+UseConcMarkSweepGC -XX:+CMSIncrementalMode -XX:-UseAdaptiveSizePolicy -Xmn128M";
+			defaultArgument += " -Xmn128M";
 			processBuilder.withArguments(defaultArgument.split(" "));
 		}
 		if (minecraftLauncher.usesWinTenHack()) {
