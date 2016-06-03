@@ -390,26 +390,7 @@ public class MinecraftGameRunner extends AbstractGameRunner implements GameProce
 			if (result.length() > 0) {
 				result.append(separator);
 			}
-			String r = file.getAbsolutePath();
-			//String name = file.getName();
-
-			// Re-enable this if signing is required
-			/*
-			 * if(name.contains("authlib")) { // Patch authlib File dir =
-			 * file.getParentFile(); String ver = dir.getName(); File patched =
-			 * new File(dir, "authlib-patched-" + ver + ".jar");
-			 * 
-			 * JarPatcher patcher = new JarPatcher(file);
-			 * patcher.setEntry("com/mojang/authlib/properties/Property.class",
-			 * Resources.loadByteArray("resources/Property.class"));
-			 * patcher.setEntry("yggdrasil_session_pubkey.der",
-			 * Resources.loadByteArray("resources/ms_pubkey.der"));
-			 * patcher.write(patched);
-			 * 
-			 * r = patched.getAbsolutePath(); }
-			 */
-
-			result.append(r);
+			result.append(file.getAbsolutePath());
 		}
 
 		result.append(separator);
