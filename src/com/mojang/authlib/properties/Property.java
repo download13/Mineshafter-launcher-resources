@@ -1,11 +1,6 @@
 package com.mojang.authlib.properties;
 
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
-import java.security.Signature;
-import java.security.SignatureException;
-import org.apache.commons.codec.binary.Base64;
 
 public class Property
 {
@@ -47,27 +42,6 @@ public class Property
   
   public boolean isSignatureValid(PublicKey publicKey)
   {
-    try
-    {
-      Signature signature = Signature.getInstance("SHA1withRSA");
-      signature.initVerify(publicKey);
-      signature.update(this.value.getBytes());
-      boolean r = signature.verify(Base64.decodeBase64(this.signature));
-      System.out.println("isSignatureValid: " + r);
-      return r;
-    }
-    catch (NoSuchAlgorithmException e)
-    {
-      e.printStackTrace();
-    }
-    catch (InvalidKeyException e)
-    {
-      e.printStackTrace();
-    }
-    catch (SignatureException e)
-    {
-      e.printStackTrace();
-    }
-    return false;
+    return true;
   }
 }
