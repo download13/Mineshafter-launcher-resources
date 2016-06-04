@@ -395,7 +395,7 @@ public class MinecraftGameRunner extends AbstractGameRunner implements GameProce
 
 		result.append(separator);
 		result.append("ms-starter.jar");
-		
+
 		result.append(separator);
 		result.append(".");
 
