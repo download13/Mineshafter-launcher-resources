@@ -1,5 +1,41 @@
 package net.minecraft.launcher.game;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.InetSocketAddress;
+import java.net.PasswordAuthentication;
+import java.net.Proxy;
+import java.util.Collection;
+import java.util.Date;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.TreeSet;
+import java.util.UUID;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+
+import net.minecraft.launcher.Launcher;
+import net.minecraft.launcher.profile.LauncherVisibilityRule;
+import net.minecraft.launcher.profile.Profile;
+import net.minecraft.launcher.updater.CompleteMinecraftVersion;
+import net.minecraft.launcher.updater.Library;
+
+import org.apache.commons.io.Charsets;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.filefilter.FileFilterUtils;
+import org.apache.commons.io.filefilter.IOFileFilter;
+import org.apache.commons.io.filefilter.TrueFileFilter;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.text.StrSubstitutor;
+
 import com.google.common.base.Objects;
 import com.google.common.base.Predicate;
 import com.google.gson.Gson;
@@ -23,40 +59,6 @@ import com.mojang.launcher.updater.download.Downloadable;
 import com.mojang.launcher.updater.download.assets.AssetIndex;
 import com.mojang.launcher.versions.ExtractRules;
 import com.mojang.util.UUIDTypeAdapter;
-
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.net.InetSocketAddress;
-import java.net.PasswordAuthentication;
-import java.net.Proxy;
-import java.util.Collection;
-import java.util.Date;
-import java.util.Enumeration;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.TreeSet;
-import java.util.UUID;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
-import net.minecraft.launcher.Launcher;
-import net.minecraft.launcher.profile.LauncherVisibilityRule;
-import net.minecraft.launcher.profile.Profile;
-import net.minecraft.launcher.updater.CompleteMinecraftVersion;
-import net.minecraft.launcher.updater.Library;
-import org.apache.commons.io.Charsets;
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.filefilter.FileFilterUtils;
-import org.apache.commons.io.filefilter.IOFileFilter;
-import org.apache.commons.io.filefilter.TrueFileFilter;
-import org.apache.commons.lang3.StringUtils;
-import org.apache.commons.lang3.text.StrSubstitutor;
 
 public class MinecraftGameRunner extends AbstractGameRunner implements GameProcessRunnable {
 	private static final String CRASH_IDENTIFIER_MAGIC = "#@!@#";
@@ -394,7 +396,7 @@ public class MinecraftGameRunner extends AbstractGameRunner implements GameProce
 		}
 
 		result.append(separator);
-		result.append("ms-starter.jar");
+		result.append(new File(getLauncher().getWorkingDirectory(), "ms-starter.jar").getAbsolutePath());
 
 		result.append(separator);
 		result.append(".");
