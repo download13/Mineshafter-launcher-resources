@@ -22,9 +22,12 @@ import java.util.UUID;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
-import net.minecraft.launcher.Launcher;
+import net.minecraft.launcher.CompatibilityRule.FeatureMatcher;
+import net.minecraft.launcher.CurrentLaunchFeatureMatcher;
+import net.minecraft.launcher.LauncherConstants;
 import net.minecraft.launcher.profile.LauncherVisibilityRule;
 import net.minecraft.launcher.profile.Profile;
+import net.minecraft.launcher.updater.ArgumentType;
 import net.minecraft.launcher.updater.CompleteMinecraftVersion;
 import net.minecraft.launcher.updater.Library;
 
@@ -64,7 +67,7 @@ public class MinecraftGameRunner extends AbstractGameRunner implements GameProce
 	private static final String CRASH_IDENTIFIER_MAGIC = "#@!@#";
 	private final Gson gson = new Gson();
 	private final DateTypeAdapter dateAdapter = new DateTypeAdapter();
-	private final Launcher minecraftLauncher;
+	private final net.minecraft.launcher.Launcher minecraftLauncher;
 	private final String[] additionalLaunchArgs;
 	private final GameProcessFactory processFactory = new DirectGameProcessFactory();
 	private File nativeDir;
@@ -78,15 +81,15 @@ public class MinecraftGameRunner extends AbstractGameRunner implements GameProce
 	}
 
 	protected void setStatus(GameInstanceStatus status) {
-		synchronized (lock) {
-			if ((nativeDir != null) && (status == GameInstanceStatus.IDLE)) {
-				LOGGER.info("Deleting " + nativeDir);
-				if ((!nativeDir.isDirectory()) || (FileUtils.deleteQuietly(nativeDir))) {
-					nativeDir = null;
+		synchronized (this.lock) {
+			if ((this.nativeDir != null) && (status == GameInstanceStatus.IDLE)) {
+				LOGGER.info("Deleting " + this.nativeDir);
+				if ((!this.nativeDir.isDirectory()) || (FileUtils.deleteQuietly(this.nativeDir))) {
+					this.nativeDir = null;
 				} else {
-					LOGGER.warn("Couldn't delete " + nativeDir + " - scheduling for deletion upon exit");
+					LOGGER.warn("Couldn't delete " + this.nativeDir + " - scheduling for deletion upon exit");
 					try {
-						FileUtils.forceDeleteOnExit(nativeDir);
+						FileUtils.forceDeleteOnExit(this.nativeDir);
 					} catch (Throwable localThrowable) {}
 				}
 			}
@@ -95,7 +98,7 @@ public class MinecraftGameRunner extends AbstractGameRunner implements GameProce
 	}
 
 	protected com.mojang.launcher.Launcher getLauncher() {
-		return minecraftLauncher.getLauncher();
+		return this.minecraftLauncher.getLauncher();
 	}
 
 	protected void downloadRequiredFiles(VersionSyncInfo syncInfo) {
@@ -105,19 +108,19 @@ public class MinecraftGameRunner extends AbstractGameRunner implements GameProce
 
 	protected void launchGame() throws IOException {
 		LOGGER.info("Launching game");
-		selectedProfile = minecraftLauncher.getProfileManager().getSelectedProfile();
-		auth = minecraftLauncher.getProfileManager().getAuthDatabase().getByUUID(minecraftLauncher.getProfileManager().getSelectedUser());
+		this.selectedProfile = this.minecraftLauncher.getProfileManager().getSelectedProfile();
+		this.auth = this.minecraftLauncher.getProfileManager().getAuthDatabase().getByUUID(this.minecraftLauncher.getProfileManager().getSelectedUser());
 		if (getVersion() == null) {
 			LOGGER.error("Aborting launch; version is null?");
 			return;
 		}
-		nativeDir = new File(getLauncher().getWorkingDirectory(), "versions/" + getVersion().getId() + "/" + getVersion().getId() + "-natives-" + System.nanoTime());
-		if (!nativeDir.isDirectory()) {
-			nativeDir.mkdirs();
+		this.nativeDir = new File(getLauncher().getWorkingDirectory(), "versions/" + getVersion().getId() + "/" + getVersion().getId() + "-natives-" + System.nanoTime());
+		if (!this.nativeDir.isDirectory()) {
+			this.nativeDir.mkdirs();
 		}
-		LOGGER.info("Unpacking natives to " + nativeDir);
+		LOGGER.info("Unpacking natives to " + this.nativeDir);
 		try {
-			unpackNatives(nativeDir);
+			unpackNatives(this.nativeDir);
 		} catch (IOException e) {
 			LOGGER.error("Couldn't unpack natives!", e);
 			return;
@@ -129,7 +132,7 @@ public class MinecraftGameRunner extends AbstractGameRunner implements GameProce
 			LOGGER.error("Couldn't unpack natives!", e);
 			return;
 		}
-		File gameDirectory = selectedProfile.getGameDir() == null ? getLauncher().getWorkingDirectory() : selectedProfile.getGameDir();
+		File gameDirectory = this.selectedProfile.getGameDir() == null ? getLauncher().getWorkingDirectory() : this.selectedProfile.getGameDir();
 		LOGGER.info("Launching in " + gameDirectory);
 		if (!gameDirectory.exists()) {
 			if (!gameDirectory.mkdirs()) {
@@ -139,51 +142,37 @@ public class MinecraftGameRunner extends AbstractGameRunner implements GameProce
 			LOGGER.error("Aborting launch; game directory is not actually a directory");
 			return;
 		}
-
 		File serverResourcePacksDir = new File(gameDirectory, "server-resource-packs");
 		if (!serverResourcePacksDir.exists()) {
 			serverResourcePacksDir.mkdirs();
 		}
-
-		GameProcessBuilder processBuilder = new GameProcessBuilder((String) Objects.firstNonNull(selectedProfile.getJavaPath(), OperatingSystem.getCurrentPlatform().getJavaDir()));
+		GameProcessBuilder processBuilder = new GameProcessBuilder((String) Objects.firstNonNull(this.selectedProfile.getJavaPath(), OperatingSystem.getCurrentPlatform().getJavaDir()));
 		processBuilder.withSysOutFilter(new Predicate<String>() {
 			public boolean apply(String input) {
-				System.out.println(input);
 				return input.contains(CRASH_IDENTIFIER_MAGIC);
 			}
 		});
 		processBuilder.directory(gameDirectory);
-		processBuilder.withLogProcessor(minecraftLauncher.getUserInterface().showGameOutputTab(this));
+		processBuilder.withLogProcessor(this.minecraftLauncher.getUserInterface().showGameOutputTab(this));
 
-		OperatingSystem os = OperatingSystem.getCurrentPlatform();
-		if (os.equals(OperatingSystem.OSX)) {
-			processBuilder.withArguments(new String[] { "-Xdock:icon=" + getAssetObject("icons/minecraft.icns").getAbsolutePath(), "-Xdock:name=Minecraft" });
-		} else if (os.equals(OperatingSystem.WINDOWS)) {
-			processBuilder.withArguments(new String[] { "-XX:HeapDumpPath=MojangTricksIntelDriversForPerformance_javaw.exe_minecraft.exe.heapdump" });
-		}
-		String profileArgs = selectedProfile.getJavaArgs();
+		String profileArgs = this.selectedProfile.getJavaArgs();
 		if (profileArgs != null) {
 			processBuilder.withArguments(profileArgs.split(" "));
 		} else {
 			boolean is32Bit = "32".equals(System.getProperty("sun.arch.data.model"));
-			String defaultArgument = is32Bit ? "-Xmx512M" : "-Xmx1G";
-			defaultArgument += " -Xmn128M";
+			String defaultArgument = is32Bit ? "-Xmx512M -XX:+UseConcMarkSweepGC -XX:+CMSIncrementalMode -XX:-UseAdaptiveSizePolicy -Xmn128M"
+					: "-Xmx1G -XX:+UseConcMarkSweepGC -XX:+CMSIncrementalMode -XX:-UseAdaptiveSizePolicy -Xmn128M";
 			processBuilder.withArguments(defaultArgument.split(" "));
 		}
-		if (minecraftLauncher.usesWinTenHack()) {
-			processBuilder.withArguments(new String[] { "-Dos.name=Windows 10" });
-			processBuilder.withArguments(new String[] { "-Dos.version=10.0" });
-		}
-		processBuilder.withArguments("-Djava.library.path=" + this.nativeDir.getAbsolutePath());
-		processBuilder.withArguments("-cp", constructClassPath(getVersion()));
-		processBuilder.withArguments("info.mineshafter.GameStarter");
-		processBuilder.withArguments(getVersion().getMainClass());
+		FeatureMatcher featureMatcher = createFeatureMatcher();
+		StrSubstitutor argumentsSubstitutor = createArgumentsSubstitutor(getVersion(), this.selectedProfile, gameDirectory, assetsDir, this.auth);
+
+		getVersion().addArguments(ArgumentType.JVM, featureMatcher, processBuilder, argumentsSubstitutor);
+		processBuilder.withArguments(new String[] { "info.mineshafter.GameStarter", getVersion().getMainClass() });
 
 		LOGGER.info("Half command: " + StringUtils.join(processBuilder.getFullCommands(), " "));
 
-		String[] args = getMinecraftArguments(getVersion(), selectedProfile, gameDirectory, assetsDir, auth);
-		if (args == null) { return; }
-		processBuilder.withArguments(args);
+		getVersion().addArguments(ArgumentType.GAME, featureMatcher, processBuilder, argumentsSubstitutor);
 
 		Proxy proxy = getLauncher().getProxy();
 		PasswordAuthentication proxyAuth = getLauncher().getProxyAuth();
@@ -196,49 +185,40 @@ public class MinecraftGameRunner extends AbstractGameRunner implements GameProce
 				processBuilder.withArguments(new String[] { "--proxyPass", new String(proxyAuth.getPassword()) });
 			}
 		}
-		processBuilder.withArguments(additionalLaunchArgs);
-		if ((auth == null) || (auth.getSelectedProfile() == null)) {
-			processBuilder.withArguments(new String[] { "--demo" });
-		}
-		if (selectedProfile.getResolution() != null) {
-			processBuilder.withArguments(new String[] { "--width", String.valueOf(selectedProfile.getResolution().getWidth()) });
-			processBuilder.withArguments(new String[] { "--height", String.valueOf(selectedProfile.getResolution().getHeight()) });
-		}
+		processBuilder.withArguments(this.additionalLaunchArgs);
 		try {
-			LOGGER.debug("Running " + StringUtils.join(processBuilder.getFullCommands(), " "));
-			GameProcess process = processFactory.startGame(processBuilder);
+			LOGGER.info("Running " + StringUtils.join(processBuilder.getFullCommands(), " "));
+			GameProcess process = this.processFactory.startGame(processBuilder);
 			process.setExitRunnable(this);
 
 			setStatus(GameInstanceStatus.PLAYING);
-			if (visibilityRule != LauncherVisibilityRule.DO_NOTHING) {
-				minecraftLauncher.getUserInterface().setVisible(false);
+			if (this.visibilityRule != LauncherVisibilityRule.DO_NOTHING) {
+				this.minecraftLauncher.getUserInterface().setVisible(false);
 			}
 		} catch (IOException e) {
 			LOGGER.error("Couldn't launch game", e);
 			setStatus(GameInstanceStatus.IDLE);
 			return;
 		}
-		minecraftLauncher.performCleanups();
+		this.minecraftLauncher.performCleanups();
 	}
 
 	protected CompleteMinecraftVersion getVersion() {
-		return (CompleteMinecraftVersion) version;
+		return (CompleteMinecraftVersion) this.version;
 	}
 
-	private File getAssetObject(String name) throws IOException {
-		File assetsDir = new File(getLauncher().getWorkingDirectory(), "assets");
-		File indexDir = new File(assetsDir, "indexes");
-		File objectsDir = new File(assetsDir, "objects");
+	private AssetIndex getAssetIndex() throws IOException {
 		String assetVersion = getVersion().getAssetIndex().getId();
-		File indexFile = new File(indexDir, assetVersion + ".json");
-		AssetIndex index = (AssetIndex) gson.fromJson(FileUtils.readFileToString(indexFile, Charsets.UTF_8), AssetIndex.class);
+		File indexFile = new File(new File(getAssetsDir(), "indexes"), assetVersion + ".json");
+		return (AssetIndex) this.gson.fromJson(FileUtils.readFileToString(indexFile, Charsets.UTF_8), AssetIndex.class);
+	}
 
-		String hash = ((AssetIndex.AssetObject) index.getFileMap().get(name)).getHash();
-		return new File(objectsDir, hash.substring(0, 2) + "/" + hash);
+	private File getAssetsDir() {
+		return new File(getLauncher().getWorkingDirectory(), "assets");
 	}
 
 	private File reconstructAssets() throws IOException {
-		File assetsDir = new File(getLauncher().getWorkingDirectory(), "assets");
+		File assetsDir = getAssetsDir();
 		File indexDir = new File(assetsDir, "indexes");
 		File objectDir = new File(assetsDir, "objects");
 		String assetVersion = getVersion().getAssetIndex().getId();
@@ -248,7 +228,7 @@ public class MinecraftGameRunner extends AbstractGameRunner implements GameProce
 			LOGGER.warn("No assets index file " + virtualRoot + "; can't reconstruct assets");
 			return virtualRoot;
 		}
-		AssetIndex index = (AssetIndex) gson.fromJson(FileUtils.readFileToString(indexFile, Charsets.UTF_8), AssetIndex.class);
+		AssetIndex index = (AssetIndex) this.gson.fromJson(FileUtils.readFileToString(indexFile, Charsets.UTF_8), AssetIndex.class);
 		if (index.isVirtual()) {
 			LOGGER.info("Reconstructing virtual assets folder at " + virtualRoot);
 			for (Map.Entry<String, AssetIndex.AssetObject> entry : index.getFileMap().entrySet()) {
@@ -258,20 +238,13 @@ public class MinecraftGameRunner extends AbstractGameRunner implements GameProce
 					FileUtils.copyFile(original, target, false);
 				}
 			}
-			FileUtils.writeStringToFile(new File(virtualRoot, ".lastused"), dateAdapter.serializeToString(new Date()));
+			FileUtils.writeStringToFile(new File(virtualRoot, ".lastused"), this.dateAdapter.serializeToString(new Date()));
 		}
 		return virtualRoot;
 	}
 
-	private String[] getMinecraftArguments(CompleteMinecraftVersion version, Profile selectedProfile, File gameDirectory, File assetsDirectory, UserAuthentication authentication) {
-		if (version.getMinecraftArguments() == null) {
-			LOGGER.error("Can't run version, missing minecraftArguments");
-			setStatus(GameInstanceStatus.IDLE);
-			return null;
-		}
+	public StrSubstitutor createArgumentsSubstitutor(CompleteMinecraftVersion version, Profile selectedProfile, File gameDirectory, File assetsDirectory, UserAuthentication authentication) {
 		Map<String, String> map = new HashMap<String, String>();
-		StrSubstitutor substitutor = new StrSubstitutor(map);
-		String[] split = version.getMinecraftArguments().split(" ");
 
 		map.put("auth_access_token", authentication.getAuthenticatedToken());
 		map.put("user_properties", new GsonBuilder().registerTypeAdapter(PropertyMap.class, new LegacyPropertyMapSerializer()).create().toJson(authentication.getUserProperties()));
@@ -300,17 +273,38 @@ public class MinecraftGameRunner extends AbstractGameRunner implements GameProce
 		map.put("game_directory", gameDirectory.getAbsolutePath());
 		map.put("game_assets", assetsDirectory.getAbsolutePath());
 
-		map.put("assets_root", new File(getLauncher().getWorkingDirectory(), "assets").getAbsolutePath());
+		map.put("assets_root", getAssetsDir().getAbsolutePath());
 		map.put("assets_index_name", getVersion().getAssetIndex().getId());
+
 		map.put("version_type", getVersion().getType().getName());
-		for (int i = 0; i < split.length; i++) {
-			split[i] = substitutor.replace(split[i]);
+		if (selectedProfile.getResolution() != null) {
+			map.put("resolution_width", String.valueOf(selectedProfile.getResolution().getWidth()));
+			map.put("resolution_height", String.valueOf(selectedProfile.getResolution().getHeight()));
+		} else {
+			map.put("resolution_width", "");
+			map.put("resolution_height", "");
 		}
-		return split;
+		map.put("language", "en-us");
+		try {
+			AssetIndex assetIndex = getAssetIndex();
+			for (Map.Entry<String, AssetIndex.AssetObject> entry : assetIndex.getFileMap().entrySet()) {
+				String hash = ((AssetIndex.AssetObject) entry.getValue()).getHash();
+				String path = new File(new File(getAssetsDir(), "objects"), hash.substring(0, 2) + "/" + hash).getAbsolutePath();
+				map.put("asset=" + (String) entry.getKey(), path);
+			}
+		} catch (IOException localIOException) {}
+		map.put("launcher_name", "java-minecraft-launcher");
+		map.put("launcher_version", LauncherConstants.getVersionName());
+		map.put("natives_directory", this.nativeDir.getAbsolutePath());
+		map.put("classpath", constructClassPath(getVersion()));
+		map.put("classpath_separator", System.getProperty("path.separator"));
+		map.put("primary_jar", new File(getLauncher().getWorkingDirectory(), "versions/" + getVersion().getJar() + "/" + getVersion().getJar() + ".jar").getAbsolutePath());
+
+		return new StrSubstitutor(map);
 	}
 
 	private void migrateOldAssets() {
-		File sourceDir = new File(getLauncher().getWorkingDirectory(), "assets");
+		File sourceDir = getAssetsDir();
 		File objectsDir = new File(sourceDir, "objects");
 		if (!sourceDir.isDirectory()) { return; }
 		IOFileFilter migratableFilter = FileFilterUtils.notFileFilter(FileFilterUtils.or(new IOFileFilter[] { FileFilterUtils.nameFileFilter("indexes"), FileFilterUtils.nameFileFilter("objects"),
@@ -341,7 +335,7 @@ public class MinecraftGameRunner extends AbstractGameRunner implements GameProce
 
 	private void unpackNatives(File targetDir) throws IOException {
 		OperatingSystem os = OperatingSystem.getCurrentPlatform();
-		Collection<Library> libraries = getVersion().getRelevantLibraries();
+		Collection<Library> libraries = getVersion().getRelevantLibraries(createFeatureMatcher());
 		for (Library library : libraries) {
 			Map<OperatingSystem, String> nativesPerOs = library.getNatives();
 			if ((nativesPerOs != null) && (nativesPerOs.get(os) != null)) {
@@ -360,7 +354,7 @@ public class MinecraftGameRunner extends AbstractGameRunner implements GameProce
 							if (!entry.isDirectory()) {
 								BufferedInputStream inputStream = new BufferedInputStream(zip.getInputStream(entry));
 
-								byte[] buffer = new byte[2048];
+								byte[] buffer = new byte['?'];
 								FileOutputStream outputStream = new FileOutputStream(targetFile);
 								BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(outputStream);
 								try {
@@ -383,9 +377,16 @@ public class MinecraftGameRunner extends AbstractGameRunner implements GameProce
 		}
 	}
 
+	private FeatureMatcher createFeatureMatcher() {
+		return new CurrentLaunchFeatureMatcher(this.selectedProfile, getVersion());
+	}
+
 	private String constructClassPath(CompleteMinecraftVersion version) {
 		StringBuilder result = new StringBuilder();
-		Collection<File> classPath = version.getClassPath(OperatingSystem.getCurrentPlatform(), getLauncher().getWorkingDirectory());
+		Collection<File> classPath = version.getClassPath(OperatingSystem.getCurrentPlatform(), getLauncher().getWorkingDirectory(), createFeatureMatcher());
+
+		classPath.add(new File(getLauncher().getWorkingDirectory(), "ms-starter.jar"));
+
 		String separator = System.getProperty("path.separator");
 		for (File file : classPath) {
 			if (!file.isFile()) { throw new RuntimeException("Classpath file not found: " + file); }
@@ -395,12 +396,6 @@ public class MinecraftGameRunner extends AbstractGameRunner implements GameProce
 			result.append(file.getAbsolutePath());
 		}
 
-		result.append(separator);
-		result.append(new File(getLauncher().getWorkingDirectory(), "ms-starter.jar").getAbsolutePath());
-
-		result.append(separator);
-		result.append(".");
-
 		return result.toString();
 	}
 
@@ -408,17 +403,17 @@ public class MinecraftGameRunner extends AbstractGameRunner implements GameProce
 		int exitCode = process.getExitCode();
 		if (exitCode == 0) {
 			LOGGER.info("Game ended with no troubles detected (exit code " + exitCode + ")");
-			if (visibilityRule == LauncherVisibilityRule.CLOSE_LAUNCHER) {
+			if (this.visibilityRule == LauncherVisibilityRule.CLOSE_LAUNCHER) {
 				LOGGER.info("Following visibility rule and exiting launcher as the game has ended");
 				getLauncher().shutdownLauncher();
-			} else if (visibilityRule == LauncherVisibilityRule.HIDE_LAUNCHER) {
+			} else if (this.visibilityRule == LauncherVisibilityRule.HIDE_LAUNCHER) {
 				LOGGER.info("Following visibility rule and showing launcher as the game has ended");
-				minecraftLauncher.getUserInterface().setVisible(true);
+				this.minecraftLauncher.getUserInterface().setVisible(true);
 			}
 		} else {
 			LOGGER.error("Game ended with bad state (exit code " + exitCode + ")");
 			LOGGER.info("Ignoring visibility rule and showing launcher due to a game crash");
-			minecraftLauncher.getUserInterface().setVisible(true);
+			this.minecraftLauncher.getUserInterface().setVisible(true);
 
 			String errorText = null;
 			Collection<String> sysOutLines = process.getSysOutLines();
@@ -449,7 +444,7 @@ public class MinecraftGameRunner extends AbstractGameRunner implements GameProce
 						}
 						reader.close();
 
-						minecraftLauncher.getUserInterface().showCrashReport(getVersion(), file, result.toString());
+						this.minecraftLauncher.getUserInterface().showCrashReport(getVersion(), file, result.toString());
 					} catch (IOException e) {
 						LOGGER.error("Couldn't open crash report", e);
 					} finally {
@@ -464,14 +459,14 @@ public class MinecraftGameRunner extends AbstractGameRunner implements GameProce
 	}
 
 	public void setVisibility(LauncherVisibilityRule visibility) {
-		visibilityRule = visibility;
+		this.visibilityRule = visibility;
 	}
 
 	public UserAuthentication getAuth() {
-		return auth;
+		return this.auth;
 	}
 
 	public Profile getSelectedProfile() {
-		return selectedProfile;
+		return this.selectedProfile;
 	}
 }
