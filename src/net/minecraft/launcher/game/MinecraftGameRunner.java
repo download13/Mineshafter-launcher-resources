@@ -27,6 +27,7 @@ import net.minecraft.launcher.CurrentLaunchFeatureMatcher;
 import net.minecraft.launcher.LauncherConstants;
 import net.minecraft.launcher.profile.LauncherVisibilityRule;
 import net.minecraft.launcher.profile.Profile;
+import net.minecraft.launcher.profile.ProfileManager;
 import net.minecraft.launcher.updater.ArgumentType;
 import net.minecraft.launcher.updater.CompleteMinecraftVersion;
 import net.minecraft.launcher.updater.Library;
@@ -378,7 +379,10 @@ public class MinecraftGameRunner extends AbstractGameRunner implements GameProce
 	}
 
 	private FeatureMatcher createFeatureMatcher() {
-		return new CurrentLaunchFeatureMatcher(this.selectedProfile, getVersion());
+		ProfileManager profileManager = this.minecraftLauncher.getProfileManager();
+		String uuid = profileManager.getSelectedUser();
+
+		return new CurrentLaunchFeatureMatcher(this.selectedProfile, getVersion(), profileManager.getAuthDatabase().getByUUID(uuid));
 	}
 
 	private String constructClassPath(CompleteMinecraftVersion version) {
